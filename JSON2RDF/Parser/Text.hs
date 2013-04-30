@@ -17,6 +17,7 @@ import JSON2RDF.Types
 
 expr' :: P.Parser Expression
 expr' = do
+  option mempty (P.string (T.pack "#!") *> manyTill P.anyChar (P.try P.endOfLine))
   ws_
   expr <- prelude_
   ws_
