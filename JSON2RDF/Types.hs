@@ -512,7 +512,7 @@ instance Canonical Predicate where
   canonicalize (Negation (ConstBool True)) =
     ConstBool False
   canonicalize (Negation (Negation createBool)) =
-    createBool
+    canonicalize createBool
   canonicalize (Negation createBool) =
     Negation (canonicalize createBool)
   canonicalize (Disjunction createBoolList) =
