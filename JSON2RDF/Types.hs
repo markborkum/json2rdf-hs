@@ -252,6 +252,7 @@ data Predicate = ConstBool Bool
                  deriving (Eq, Show)
 
 data Expression = InsertRDFTriple RDFLabelGenerator RDFLabelGenerator RDFLabelGenerator
+                | InsertRDFTriples RDFLabelGenerator [(RDFLabelGenerator, RDFLabelGenerator)]
                 | Conditional Predicate Expression Expression
                 | ForeachJSValue JSValueGenerator Expression
                 | ForeachJSMatchRegexPOSIX JSValueGenerator JSValueGenerator Expression
@@ -320,9 +321,9 @@ instance EvaluableT RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
           liftM (\(lb, ctx, ts) -> (lb >>= getLiteralText >>= Just . Res . T.append uri, ctx, ts)) . evaluateT (AsLit createJSValue)
   evaluateT (AsBlank createPredicateObjectList) =
     \ctx1 -> do
-      (o, ctx2, ts1) <- evaluateT newBlankRDFLabel ctx1
-      ((), ctx3, ts2) <- evaluateT (foldMap (uncurry $ InsertRDFTriple (ConstRDFLabel o)) createPredicateObjectList) ctx2
-      return (o, ctx3, ts1 `mappend` ts2)
+      (lb, ctx2, ts1) <- evaluateT newBlankRDFLabel ctx1
+      ((), ctx3, ts2) <- evaluateT (InsertRDFTriples (ConstRDFLabel lb) createPredicateObjectList) ctx2
+      return (lb, ctx3, ts1 `mappend` ts2)
   evaluateT AsNow =
     evaluateT nowRDFLabel
 
@@ -398,6 +399,11 @@ instance EvaluableT Expression RDFGraph Context () where
       (o :: Maybe RDFLabel, ctx4, ts3) <- evaluateT createObject ctx3
       let ts4 = maybe S.empty S.singleton $ liftM3 (,,) s p o
       return ((), ctx4, ts1 `mappend` ts2 `mappend` ts3 `mappend` ts4)
+  evaluateT (InsertRDFTriples createSubject createPredicateObjectList) =
+    \ctx1 -> do
+      (s :: Maybe RDFLabel, ctx2, ts1) <- evaluateT createSubject ctx1
+      ((), ctx3, ts2) <- evaluateT (foldMap (uncurry $ InsertRDFTriple (ConstRDFLabel s)) createPredicateObjectList) ctx2
+      return ((), ctx3, ts1 `mappend` ts2)
   evaluateT (Conditional createBool whenTrue whenFalse) =
     \ctx1 -> do
       (bool, ctx2, ts1) <- evaluateT createBool ctx1
@@ -545,6 +551,8 @@ instance Canonical Predicate where
 instance Canonical Expression where
   canonicalize (InsertRDFTriple createSubject createPredicate createObject) =
     InsertRDFTriple (canonicalize createSubject) (canonicalize createPredicate) (canonicalize createObject)
+  canonicalize (InsertRDFTriples createSubject createPredicateObjectList) =
+    InsertRDFTriples (canonicalize createSubject) (fmap (uncurry (on (,) canonicalize)) createPredicateObjectList)
   canonicalize (Conditional createBool whenTrue whenFalse) =
     Conditional (canonicalize createBool) (canonicalize whenTrue) (canonicalize whenFalse)
   canonicalize (ForeachJSValue createJSValue expr) =
@@ -630,6 +638,8 @@ instance (Ord v) => Described (D.DescriptorTree T.Text v) Predicate where
 instance (Ord v) => Described (D.DescriptorTree T.Text v) Expression where
   describeWith f z (InsertRDFTriple createSubject createPredicate createObject) =
     describeWith f z createSubject `f` describeWith f z createPredicate `f` describeWith f z createObject
+  describeWith f z (InsertRDFTriples createSubject createPredicateObjectList) =
+    describeWith f z createSubject `f` describeWith f z createPredicateObjectList
   describeWith f z (Conditional createBool whenTrue whenFalse) =
     describeWith f z createBool `f` describeWith f z whenTrue `f` describeWith f z whenFalse
   describeWith f z (ForeachJSValue createJSValue@(LookupJSValue _) expr) =
@@ -731,9 +741,10 @@ instance Pretty RDFLabelGenerator where
     text "_:" <> (let s = T.unpack text' in if any (== '"') s then text (show s) else text s)
   pPrint (AsQName Nothing createJSValue) =
     text "_:" <> pPrint createJSValue
+  pPrint (AsBlank []) =
+    brackets empty
   pPrint (AsBlank createPredicateObjectList) =
-    let doc = hsep (L.intersperse (text ";") (fmap (uncurry (on (<+>) pPrint)) createPredicateObjectList))
-    in  brackets (if null createPredicateObjectList then empty else space <> doc <> space)
+    brackets (space <> hsep (L.intersperse (text ";") (fmap (uncurry (on (<+>) pPrint)) createPredicateObjectList)) <> space)
   pPrint AsNow =
     text "now"
 
@@ -763,6 +774,13 @@ instance Pretty Expression where
       where
         pp _ (InsertRDFTriple createSubject createPredicate createObject) =
           pPrint createSubject <+> pPrint createPredicate <+> pPrint createObject <+> char '.'
+        pp _ (InsertRDFTriples _ []) =
+          empty
+        pp n (InsertRDFTriples createSubject createPredicateObjectList) =
+          pPrint createSubject <> (hcat (L.intersperse (space <> char ';') (fmap go createPredicateObjectList))) <+> char '.'
+            where
+              go (createPredicate, createObject) =
+                newline <> indent (succ n) <> pPrint createPredicate <+> pPrint createObject
         pp n (Conditional createBool whenTrue whenFalse) =
           text "IF"
             <+> pPrint createBool

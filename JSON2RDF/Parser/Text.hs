@@ -190,7 +190,8 @@ triplesSameSubject_ = do
   pos <- liftM concat (sepBy1 predicateObjectList_ (ws_ *> P.char ';' *> ws_))
   ws_
   P.char '.'
-  return (mconcat (fmap (uncurry (InsertRDFTriple s)) pos))
+  -- return (mconcat (fmap (uncurry (InsertRDFTriple s)) pos))
+  return (InsertRDFTriples s pos)
 
 predicateObjectList_ :: P.Parser [(RDFLabelGenerator, RDFLabelGenerator)]
 predicateObjectList_ = do
