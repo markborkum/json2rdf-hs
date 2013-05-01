@@ -255,14 +255,14 @@ ref_ = do
         P.char '.'
         return JSId
       urlDecode_ = do
-        P.string (T.pack "urlDecode")
+        P.string (T.pack "unescape")
         ws_
         P.char '('
         ws_
         P.char ')'
         return JSURLDecode
       urlEncode_ = do
-        P.string (T.pack "urlEncode")
+        P.string (T.pack "escape")
         ws_
         P.char '('
         ws_
