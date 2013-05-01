@@ -24,6 +24,7 @@ import Data.Monoid (Monoid(..), All(..), Any(..))
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Time.Format (parseTime, formatTime)
+import Network.HTTP.Base (urlEncode, urlDecode)
 import System.Locale (defaultTimeLocale)
 import Text.PrettyPrint.HughesPJ ((<>), (<+>), Doc, empty, braces, brackets, char, comma, colon, doubleQuotes, hcat, hsep, int, parens, space, text, zeroWidthText)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint))
@@ -140,6 +141,8 @@ data JSKey = JSId
            | JSTime String String
            | JSDecode
            | JSEncode
+           | JSURLDecode
+           | JSURLEncode
              deriving (Eq, Ord, Read, Show)
 
 isIdempotent :: JSKey -> Bool
@@ -223,6 +226,14 @@ instance FromJSKey JSKey where
     mzero
   fromJSKey JSEncode v =
     return . JS.String . T.pack . B8.unpack . JS.encode $ v
+  fromJSKey JSURLDecode (JS.String text) =
+    return . JS.String . T.pack . urlDecode . T.unpack $ text
+  fromJSKey JSURLDecode _ =
+    mzero
+  fromJSKey JSURLEncode (JS.String text) =
+    return . JS.String . T.pack . urlEncode . T.unpack $ text
+  fromJSKey JSURLEncode _ =
+    mzero
 
 -------------------------------------------------------------------------------
 
@@ -710,6 +721,10 @@ instance Pretty JSValueGenerator where
           text "decode" <> parens empty
         go JSEncode =
           text "encode" <> parens empty
+        go JSURLDecode =
+          text "urlDecode" <> parens empty
+        go JSURLEncode =
+          text "urlEncode" <> parens empty
   pPrint (LookupRDFLabel key) =
     pPrint (GetRDFLabel key)
 
