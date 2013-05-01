@@ -9,6 +9,7 @@ module JSON2RDF.Types
 
 import Prelude hiding (foldr)
 
+import Control.Arrow (first)
 import Control.Monad ((>=>), join, liftM, liftM2, liftM3, MonadPlus(mzero))
 import Control.Monad.RWS.Lazy.Evaluable (EvaluableT(..))
 import Data.Aeson.Parser (value')
@@ -228,6 +229,7 @@ instance FromJSKey JSKey where
 data JSValueGenerator = ConstJSValue (Maybe JS.Value)
                       | ConcatJSValue [JSValueGenerator]
                       | LookupJSValue [JSKey]
+                      | LookupRDFLabel T.Text
                         deriving (Eq, Show)
 
 data RDFLabelGenerator = ConstRDFLabel (Maybe RDFLabel)
@@ -282,14 +284,21 @@ instance Monoid Expression where
 instance EvaluableT JSValueGenerator RDFGraph Context (Maybe JS.Value) where
   evaluateT (ConstJSValue v) =
     evaluateT (const v :: Context -> Maybe JS.Value)
-  -- evaluateT (ConcatJSValue []) =
-  --  evaluateT (const Nothing :: Context -> Maybe JS.Value)
-  -- evaluateT (ConcatJSValue [v]) =
-  --  evaluateT v
   evaluateT (ConcatJSValue createJSValueList) =
     liftM (\(text, ctx, ts) -> (liftM JS.String text, ctx, ts)) . evaluateTFoldr (\(v :: Maybe JS.Value) -> liftM2 T.append (v >>= (toLiteral >=> getLiteralText))) (return T.empty) createJSValueList
   evaluateT (LookupJSValue key) =
     evaluateT ((getJSValue >=> fromJSKey key) >>= (,))
+  evaluateT (LookupRDFLabel key) =
+    evaluateT (first go . lookupRDFLabel key)
+      where
+        go (Just (Res uri)) =
+          Just (JS.String uri)
+        go (Just (PlainLit text _)) =
+          Just (JS.String text)
+        go (Just (TypedLit text _)) =
+          Just (JS.String text)
+        go _ =
+          Nothing
 
 instance EvaluableT RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
   evaluateT (ConstRDFLabel lb) =
@@ -701,6 +710,8 @@ instance Pretty JSValueGenerator where
           text "decode" <> parens empty
         go JSEncode =
           text "encode" <> parens empty
+  pPrint (LookupRDFLabel key) =
+    pPrint (GetRDFLabel key)
 
 instance Pretty RDFLabelGenerator where
   pPrint (ConstRDFLabel (Just lb@(Res uri)))

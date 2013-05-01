@@ -242,11 +242,15 @@ ref_ = do
   P.char '$'
   P.char '{'
   ws_
-  keys <- sepBy (choice [this_, decode_, encode_, length_, match_, strip_, downcase_, upcase_, strftime_, quoted_, unquoted_]) (ws_ *> P.char '/' *> ws_)
+  createJSValue <- choice [varRef_, valueRef_]
   ws_
   P.char '}'
-  return (LookupJSValue (JSId : keys))
+  return createJSValue
     where
+      varRef_ =
+        liftM (\(GetRDFLabel key) -> LookupRDFLabel key) var_
+      valueRef_ =
+        liftM (LookupJSValue . (:) JSId) (sepBy1 (choice [this_, decode_, encode_, length_, match_, strip_, downcase_, upcase_, strftime_, quoted_, unquoted_]) (ws_ *> P.char '/' *> ws_))
       this_ = do
         P.char '.'
         return JSId
@@ -352,11 +356,6 @@ resource_ :: P.Parser RDFLabelGenerator
 resource_ =
   choice [var_, qname_, interpolatedUriref_]
     where
-      var_ = do
-        P.char '?'
-        ws_
-        key <- bareword_
-        return (GetRDFLabel key)
       qname_ = do
         key <- prefix_
         ws_
@@ -369,6 +368,13 @@ resource_ =
       qnameValue_ key = do
         createJSValue <- interpolatedString_
         return (AsQName key createJSValue)
+
+var_ :: P.Parser RDFLabelGenerator
+var_ = do
+  P.char '?'
+  ws_
+  key <- bareword_
+  return (GetRDFLabel key)
 
 literal_ :: P.Parser RDFLabelGenerator
 literal_ =
