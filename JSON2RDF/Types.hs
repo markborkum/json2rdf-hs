@@ -300,16 +300,13 @@ instance EvaluableT JSValueGenerator RDFGraph Context (Maybe JS.Value) where
   evaluateT (LookupJSValue key) =
     evaluateT ((getJSValue >=> fromJSKey key) >>= (,))
   evaluateT (LookupRDFLabel key) =
-    evaluateT (first go . lookupRDFLabel key)
+    evaluateT (first (>>= go) . lookupRDFLabel key)
       where
-        go (Just (Res uri)) =
-          Just (JS.String uri)
-        go (Just (PlainLit text _)) =
-          Just (JS.String text)
-        go (Just (TypedLit text _)) =
-          Just (JS.String text)
-        go _ =
-          Nothing
+        go :: (MonadPlus m) => RDFLabel -> m JS.Value
+        go lb@(Res _) =
+          fromResource lb
+        go lb =
+          fromLiteral lb
 
 instance EvaluableT RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
   evaluateT (ConstRDFLabel lb) =
@@ -722,9 +719,9 @@ instance Pretty JSValueGenerator where
         go JSEncode =
           text "encode" <> parens empty
         go JSURLDecode =
-          text "urlDecode" <> parens empty
+          text "unescape" <> parens empty
         go JSURLEncode =
-          text "urlEncode" <> parens empty
+          text "escape" <> parens empty
   pPrint (LookupRDFLabel key) =
     pPrint (GetRDFLabel key)
 
