@@ -132,6 +132,7 @@ nowRDFLabel =
 
 data JSKey = JSId
            | JSLength
+           | JSReverseArray
            | JSLookupArray !Int
            | JSLookupObject T.Text
            | JSMatchRegexPOSIX String
@@ -179,6 +180,10 @@ instance FromJSKey JSKey where
     return . JS.Number . I . toInteger . HM.size $ hashMap
   fromJSKey JSLength _ =
     return . JS.Number . I $ 1
+  fromJSKey JSReverseArray (JS.Array vector) =
+    return . JS.Array . V.reverse $ vector
+  fromJSKey JSReverseArray _ =
+    mzero
   fromJSKey (JSLookupArray idx) (JS.Array vector)
     | (idx >= 0) && (idx < V.length vector) =
       V.indexM vector idx
@@ -700,6 +705,8 @@ instance Pretty JSValueGenerator where
           char '.'
         go JSLength =
           text "length" <> parens empty
+        go JSReverseArray =
+          text "reverse" <> parens empty
         go (JSLookupArray idx) =
           int idx
         go (JSLookupObject key) =

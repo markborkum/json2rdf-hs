@@ -250,7 +250,7 @@ ref_ = do
       varRef_ =
         liftM (\(GetRDFLabel key) -> LookupRDFLabel key) var_
       valueRef_ =
-        liftM (LookupJSValue . (:) JSId) (sepBy1 (choice [this_, urlDecode_, urlEncode_, decode_, encode_, length_, match_, strip_, downcase_, upcase_, strftime_, quoted_, unquoted_]) (ws_ *> P.char '/' *> ws_))
+        liftM (LookupJSValue . (:) JSId) (sepBy1 (choice [this_, urlDecode_, urlEncode_, decode_, encode_, reverse_, length_, match_, strip_, downcase_, upcase_, strftime_, quoted_, unquoted_]) (ws_ *> P.char '/' *> ws_))
       this_ = do
         P.char '.'
         return JSId
@@ -282,6 +282,13 @@ ref_ = do
         ws_
         P.char ')'
         return JSEncode
+      reverse_ = do
+        P.string (T.pack "reverse")
+        ws_
+        P.char '('
+        ws_
+        P.char ')'
+        return JSReverseArray
       length_ = do
         P.string (T.pack "length")
         ws_

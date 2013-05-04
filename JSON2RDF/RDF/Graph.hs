@@ -79,29 +79,29 @@ setLiteralDatatype _ _ =
   mzero
 
 class FromResource a where
-	fromResource :: (MonadPlus m) => RDFLabel -> m a
+  fromResource :: (MonadPlus m) => RDFLabel -> m a
 
 instance FromResource JS.Value where
-	fromResource (Res text) =
-		return (JS.String text)
-	fromResource _ =
-		mzero
+  fromResource (Res text) =
+    return (JS.String text)
+  fromResource _ =
+    mzero
 
 class FromLiteral a where
-	fromLiteral :: (MonadPlus m) => RDFLabel -> m a
+  fromLiteral :: (MonadPlus m) => RDFLabel -> m a
 
 instance FromLiteral JS.Value where
-	fromLiteral (PlainLit val _) =
-		return (JS.String val)
-	fromLiteral (TypedLit val dType)
-		| dType `elem` dTypes = either (const mzero) return (Data.Attoparsec.ByteString.parseOnly value' (B8.pack (T.unpack val)))
-		| otherwise           = return (JS.String val)
-		where
-			dTypes =
-				[ T.pack "http://www.w3.org/2001/XMLSchema#boolean"
-				, T.pack "http://www.w3.org/2001/XMLSchema#double"
-				, T.pack "http://www.w3.org/2001/XMLSchema#integer"
-				]
+  fromLiteral (PlainLit val _) =
+    return (JS.String val)
+  fromLiteral (TypedLit val dType)
+    | dType `elem` dTypes = either (const mzero) return (Data.Attoparsec.ByteString.parseOnly value' (B8.pack (T.unpack val)))
+    | otherwise           = return (JS.String val)
+    where
+      dTypes =
+        [ T.pack "http://www.w3.org/2001/XMLSchema#boolean"
+        , T.pack "http://www.w3.org/2001/XMLSchema#double"
+        , T.pack "http://www.w3.org/2001/XMLSchema#integer"
+        ]
 
 class ToResource a where
   toResource :: (MonadPlus m) => a -> m RDFLabel
