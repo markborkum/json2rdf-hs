@@ -128,9 +128,9 @@ conditional_ = do
               on NotEquals mkOperand_
             mkOperand_ (ConstBool b) =
               Left (ConstJSValue (Just (JS.Bool b)))
-            mkOperand_ (IsJSValueDefined createJSValue) =
+            mkOperand_ (IsDefined (Left createJSValue)) =
               Left createJSValue
-            mkOperand_ (IsRDFLabelDefined createRDFLabel) =
+            mkOperand_ (IsDefined (Right createRDFLabel)) =
               Right createRDFLabel
             mkOperand_ _ =
               Left (ConstJSValue Nothing)
@@ -143,7 +143,7 @@ conditional_ = do
       unaryExpr_ =
         choice [liftM Negation (P.char '!' *> ws_ *> unaryExpr_), primaryExpr_]
       primaryExpr_ =
-        choice [brackettedExpr_, false_, true_, liftM IsJSValueDefined value_, liftM IsRDFLabelDefined (choice [literal_, resource_])]
+        choice [brackettedExpr_, false_, true_, liftM (IsDefined . Left) value_, liftM (IsDefined . Right) (choice [literal_, resource_])]
       brackettedExpr_ = do
         P.char '('
         ws_

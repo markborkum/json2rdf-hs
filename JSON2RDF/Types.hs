@@ -260,8 +260,7 @@ data RDFLabelGenerator = ConstRDFLabel (Maybe RDFLabel)
                          deriving (Eq, Show)
 
 data Predicate = ConstBool Bool
-               | IsJSValueDefined JSValueGenerator
-               | IsRDFLabelDefined RDFLabelGenerator
+               | IsDefined (Either JSValueGenerator RDFLabelGenerator)
                | Equals (Either JSValueGenerator RDFLabelGenerator) (Either JSValueGenerator RDFLabelGenerator)
                | NotEquals (Either JSValueGenerator RDFLabelGenerator) (Either JSValueGenerator RDFLabelGenerator)
                | Negation Predicate
@@ -352,15 +351,15 @@ instance EvaluableT RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
 instance EvaluableT Predicate RDFGraph Context Bool where
   evaluateT (ConstBool bool) =
     evaluateT (const bool :: Context -> Bool)
-  evaluateT (IsJSValueDefined createJSValue) =
-    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (isJSValueDefined v, ctx, ts)) . evaluateT createJSValue
+  evaluateT (IsDefined (Left createJSValue)) =
+    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (isDefined v, ctx, ts)) . evaluateT createJSValue
       where
-        isJSValueDefined =
+        isDefined =
           liftM2 (&&) isJust (/= Just JS.Null)
-  evaluateT (IsRDFLabelDefined createRDFLabel) =
-    liftM (\(lb :: Maybe RDFLabel, ctx, ts) -> (isRDFLabelDefined lb, ctx, ts)) . evaluateT createRDFLabel
+  evaluateT (IsDefined (Right createRDFLabel)) =
+    liftM (\(lb :: Maybe RDFLabel, ctx, ts) -> (isDefined lb, ctx, ts)) . evaluateT createRDFLabel
       where
-        isRDFLabelDefined =
+        isDefined =
           isJust
   evaluateT (Equals (Left createJSValue1) (Left createJSValue2)) =
     \ctx1 -> do
@@ -517,24 +516,12 @@ instance Canonical RDFLabelGenerator where
     x
 
 instance Canonical Predicate where
-  canonicalize (IsJSValueDefined createJSValue) =
-    IsJSValueDefined (canonicalize createJSValue)
-  canonicalize (IsRDFLabelDefined createRDFLabel) =
-    IsRDFLabelDefined (canonicalize createRDFLabel)
+  canonicalize (IsDefined e) =
+    IsDefined (fmap canonicalize e)
   canonicalize (Equals l r) =
-    on Equals go l r
-      where
-        go (Left createJSValue) =
-          Left (canonicalize createJSValue)
-        go (Right createRDFLabel) =
-          Right (canonicalize createRDFLabel)
+    on Equals (fmap canonicalize) l r
   canonicalize (NotEquals l r) =
-    on NotEquals go l r
-      where
-        go (Left createJSValue) =
-          Left (canonicalize createJSValue)
-        go (Right createRDFLabel) =
-          Right (canonicalize createRDFLabel)
+    on NotEquals (fmap canonicalize) l r
   canonicalize (Negation (ConstBool False)) =
     ConstBool True
   canonicalize (Negation (ConstBool True)) =
@@ -640,10 +627,8 @@ instance (Ord v) => Described (D.DescriptorTree T.Text v) RDFLabelGenerator wher
     z
 
 instance (Ord v) => Described (D.DescriptorTree T.Text v) Predicate where
-  describeWith f z (IsJSValueDefined createJSValue) =
-    describeWith f z createJSValue
-  describeWith f z (IsRDFLabelDefined createRDFLabel) =
-    describeWith f z createRDFLabel
+  describeWith f z (IsDefined e) =
+    describeWith f z e
   describeWith f z (Equals l r) =
     describeWith f z l `f` describeWith f z r
   describeWith f z (NotEquals l r) =
@@ -783,9 +768,9 @@ instance Pretty Predicate where
     text "false"
   pPrint (ConstBool True) =
     text "true"
-  pPrint (IsJSValueDefined createJSValue) =
+  pPrint (IsDefined (Left createJSValue)) =
     pPrint createJSValue
-  pPrint (IsRDFLabelDefined createRDFLabel) =
+  pPrint (IsDefined (Right createRDFLabel)) =
     pPrint createRDFLabel
   pPrint (Equals l r) =
     either pPrint pPrint l <+> text "==" <+> either pPrint pPrint r
