@@ -1,13 +1,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 import           Control.Monad (forever)
-import qualified Data.Aeson as JS
 import           Data.Aeson.Parser (value')
 import qualified Data.Attoparsec.ByteString
 import qualified Data.Attoparsec.Text
 import qualified Data.ByteString.Char8 as B8
 import           Data.Canonical (canonicalize)
-import           Data.Described (Described(describeWith))
+import           Data.Described (describeWith)
 import qualified Data.DescriptorTree as D
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -54,28 +53,20 @@ main = do
       go1 (Transform _) =
         forever . go2
       go1 (Describe _ bool1 bool2) = do
-        putStrLn_pp_DescriptorTree bool2 . opts_describeWith bool1
+        putStrLn . render . D.pp_DescriptorTree bool2 . describeWith' bool1
+          where
+            describeWith' :: Bool -> Expression -> D.DescriptorTree T.Text ()
+            describeWith' True =
+              describeWith D.intersection maxBound
+            describeWith' False =
+              describeWith D.union minBound
       
       go2 :: Expression -> IO ()
       go2 expr = do
         currentTime <- getCurrentTime
         currentLine <- B8.getLine
         let v = Data.Attoparsec.ByteString.parseOnly value' currentLine
-        either (hPutStrLn stderr) (putStrLn_pp_RDFTriple . js2rdf (Just currentTime) expr . Just) v
-      
-      opts_describeWith :: Bool -> Expression -> D.DescriptorTree T.Text ()
-      opts_describeWith True =
-        describeWith D.intersection maxBound
-      opts_describeWith False =
-        describeWith D.union minBound
-      
-      putStrLn_pp_DescriptorTree :: (Show k, Show v) => Bool -> D.DescriptorTree k v -> IO ()
-      putStrLn_pp_DescriptorTree b =
-        putStrLn . render . D.pp_DescriptorTree b
-      
-      putStrLn_pp_RDFTriple :: S.Set RDFTriple -> IO ()
-      putStrLn_pp_RDFTriple =
-        mapM_ (putStrLn . render . pp_RDFTriple) . S.toList
+        either (hPutStrLn stderr) (mapM_ (putStrLn . render . pp_RDFTriple) . S.toList . js2rdf (Just currentTime) expr . Just) v
       
       pp_RDFTriple :: RDFTriple -> Doc
       pp_RDFTriple (s, p, o) =
