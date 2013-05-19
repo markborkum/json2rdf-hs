@@ -52,7 +52,7 @@ main = do
       go1 :: JSON2RDF -> Expression -> IO ()
       go1 (Transform _) =
         forever . go2
-      go1 (Describe _ bool1 bool2) = do
+      go1 (Describe _ bool1 bool2) =
         putStrLn . render . D.pp_DescriptorTree bool2 . describeWith' bool1
           where
             describeWith' :: Bool -> Expression -> D.DescriptorTree T.Text ()
