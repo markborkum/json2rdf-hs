@@ -61,12 +61,7 @@ main = do
         currentTime <- getCurrentTime
         currentLine <- B8.getLine
         let v = Data.Attoparsec.ByteString.parseOnly value' currentLine
-        let ts = js2rdf (Just currentTime) expr (eitherToMaybe v)
-        putStrLn_pp_RDFTriple ts
-      
-      eitherToMaybe :: Either a b -> Maybe b
-      eitherToMaybe =
-        either (const Nothing) Just
+        either (hPutStrLn stderr) (putStrLn_pp_RDFTriple . js2rdf (Just currentTime) expr . Just) v
       
       opts_describeWith :: Bool -> Expression -> D.DescriptorTree T.Text ()
       opts_describeWith True =
