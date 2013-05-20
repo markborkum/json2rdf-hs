@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 import           Control.Monad (forever)
+import qualified Data.Aeson as JS
 import           Data.Aeson.Parser (value')
 import qualified Data.Attoparsec.ByteString
 import qualified Data.Attoparsec.Text
@@ -19,19 +20,20 @@ import           Text.PrettyPrint.HughesPJClass (pPrint, render, Doc, (<+>), cha
 
 import JSON2RDF
 
-data JSON2RDF = Transform { file_ :: FilePath }
-              | Describe  { file_ :: FilePath , intersection_ :: Bool , pretty_ :: Bool }
+data JSON2RDF = Transform { file_ :: FilePath , slurp_ :: Bool }
+              | Describe  { file_ :: FilePath , intersection_ :: Bool , indent_ :: Bool }
                 deriving (Eq, Show, Data, Typeable)
 
 mode :: Mode (CmdArgs JSON2RDF)
 mode =
   cmdArgsMode
-    $ modes [ Transform { file_ = fileFlags def
+    $ modes [ Transform { file_         = fileFlags def
+                        , slurp_        = def &= name "s" &= help "Read entire input stream (exactly once)"
                         } &= help "Transform JSON document(s) into RDF graph"
                           &= auto
             , Describe  { file_         = fileFlags def
                         , intersection_ = def &= name "I" &= help "Use \"intersection\" operator (instead of \"union\")"
-                        , pretty_       = def &= name "P" &= help "Format output using pretty-printer"
+                        , indent_       = def &= name "i" &= help "\"Pretty print\" output with proper indentation"
                         } &= help "Print description of JSON document structure"
             ] &= program "json2rdf"
               &= summary "JSON2RDF v0.0.1, (C) Mark Borkum <m.i.borkum@soton.ac.uk>"
@@ -43,16 +45,23 @@ main :: IO ()
 main = do
   args <- cmdArgsRun mode
   
-  text <- Data.Text.IO.readFile (file_ args)
-  let expr = fmap canonicalize (Data.Attoparsec.Text.parseOnly expr' text)
-  either (\l -> hPutStrLn stderr l >> exitFailure) (\r -> go1 args r >> exitSuccess) expr
+  msgOrExpr <- parseExpression (Data.Text.IO.readFile (file_ args))
+  either (\msg -> hPutStrLn stderr msg >> exitFailure) (\expr -> rpc args expr >> exitSuccess) msgOrExpr
+  
+  return ()
   
     where
       
-      go1 :: JSON2RDF -> Expression -> IO ()
-      go1 (Transform _) =
-        forever . go2
-      go1 (Describe _ bool1 bool2) =
+      parseExpression :: IO T.Text -> IO (Either String Expression)
+      parseExpression =
+        (>>= return . fmap canonicalize . Data.Attoparsec.Text.parseOnly expr')
+      
+      rpc :: JSON2RDF -> Expression -> IO ()
+      rpc (Transform _ True) =
+        transform B8.getContents
+      rpc (Transform _ False) =
+        forever . transform B8.getLine
+      rpc (Describe _ bool1 bool2) =
         putStrLn . render . D.pp_DescriptorTree bool2 . describeWith' bool1
           where
             describeWith' :: Bool -> Expression -> D.DescriptorTree T.Text ()
@@ -61,13 +70,19 @@ main = do
             describeWith' False =
               describeWith D.union minBound
       
-      go2 :: Expression -> IO ()
-      go2 expr = do
-        currentTime <- getCurrentTime
-        currentLine <- B8.getLine
-        let v = Data.Attoparsec.ByteString.parseOnly value' currentLine
-        either (hPutStrLn stderr) (mapM_ (putStrLn . render . pp_RDFTriple) . S.toList . js2rdf (Just currentTime) expr . Just) v
-      
-      pp_RDFTriple :: RDFTriple -> Doc
-      pp_RDFTriple (s, p, o) =
-        pPrint s <+> pPrint p <+> pPrint o <+> char '.'
+      transform :: IO B8.ByteString -> Expression -> IO ()
+      transform m expr =
+        m >>= either onFailure onSuccess . Data.Attoparsec.ByteString.parseOnly value'
+          where
+            onFailure msg =
+              hPutStrLn stderr msg >> js2rdf' expr Nothing
+            onSuccess =
+              js2rdf' expr . Just
+            js2rdf' expr v = do
+              currentTime <- getCurrentTime
+              let ts = js2rdf expr (Just currentTime) v
+              putStrLn_RDFGraph ts
+            putStrLn_RDFGraph =
+              mapM_ (putStrLn . render . pp_RDFTriple) . S.toList
+            pp_RDFTriple (s, p, o) =
+              pPrint s <+> pPrint p <+> pPrint o <+> char '.'

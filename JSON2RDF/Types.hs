@@ -43,9 +43,9 @@ import qualified Data.Vector as V
 
 import JSON2RDF.RDF.Graph
 
-js2rdf :: Maybe UTCTime -> Expression -> Maybe JS.Value -> RDFGraph
-js2rdf time f v =
-  (\((), _, ts) -> ts) . evaluate f . setJSValue v . setCurrentTime time $ emptyContext
+js2rdf :: Expression -> Maybe UTCTime -> Maybe JS.Value -> RDFGraph
+js2rdf f time v =
+  (\((), _, ts) -> ts) . evaluate f . setCurrentTime time . setJSValue v $ emptyContext
 
 -------------------------------------------------------------------------------
 
