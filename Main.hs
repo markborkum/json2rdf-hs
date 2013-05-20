@@ -56,6 +56,11 @@ main = do
       parseExpression =
         (>>= return . fmap canonicalize . Data.Attoparsec.Text.parseOnly expr')
       
+      parseValue :: IO B8.ByteString -> IO (Maybe JS.Value)
+      parseValue =
+        let logger = either (\msg -> hPutStrLn stderr msg >> return Nothing) (return . Just)
+        in  (>>= logger . Data.Attoparsec.ByteString.parseOnly value')
+      
       rpc :: JSON2RDF -> Expression -> IO ()
       rpc (Transform _ True) =
         transform B8.getContents
@@ -71,18 +76,12 @@ main = do
               describeWith D.union minBound
       
       transform :: IO B8.ByteString -> Expression -> IO ()
-      transform m expr =
-        m >>= either onFailure onSuccess . Data.Attoparsec.ByteString.parseOnly value'
+      transform mv expr = do
+        v <- parseValue mv
+        currentTime <- getCurrentTime
+        let ts = js2rdf expr (Just currentTime) v
+        mapM_ (putStrLn . render . pp_RDFTriple) (S.toList ts)
           where
-            onFailure msg =
-              hPutStrLn stderr msg >> js2rdf' expr Nothing
-            onSuccess =
-              js2rdf' expr . Just
-            js2rdf' expr v = do
-              currentTime <- getCurrentTime
-              let ts = js2rdf expr (Just currentTime) v
-              putStrLn_RDFGraph ts
-            putStrLn_RDFGraph =
-              mapM_ (putStrLn . render . pp_RDFTriple) . S.toList
+            pp_RDFTriple :: RDFTriple -> Doc
             pp_RDFTriple (s, p, o) =
               pPrint s <+> pPrint p <+> pPrint o <+> char '.'
