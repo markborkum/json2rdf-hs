@@ -48,8 +48,6 @@ main = do
   msgOrExpr <- parseExpression (Data.Text.IO.readFile (file_ args))
   either (\msg -> hPutStrLn stderr msg >> exitFailure) (\expr -> rpc args expr >> exitSuccess) msgOrExpr
   
-  return ()
-  
     where
       
       parseExpression :: IO T.Text -> IO (Either String Expression)
