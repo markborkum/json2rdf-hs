@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
-module Control.Monad.RWS.Lazy.Evaluable
+module Control.Monad.Trans.RWS.Lazy.Evaluable
 ( EvaluableT(..)
 ) where
 
 import Prelude hiding (foldr)
 
-import Control.Monad.RWS.Lazy (RWST(..))
+import Control.Monad.Trans.RWS.Lazy (RWST(..))
 import Data.Foldable (Foldable(foldr))
 import Data.Functor.Identity (Identity(runIdentity))
 import Data.Monoid (Monoid(mempty, mappend))

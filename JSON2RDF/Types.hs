@@ -11,7 +11,7 @@ import Prelude hiding (foldr)
 
 import Control.Arrow (first)
 import Control.Monad ((>=>), join, liftM, liftM2, liftM3, MonadPlus(mzero))
-import Control.Monad.RWS.Lazy.Evaluable (EvaluableT(..))
+import Control.Monad.Trans.RWS.Lazy.Evaluable (EvaluableT(..))
 import Data.Aeson.Parser (value')
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.Attoparsec.Number (Number(..))
