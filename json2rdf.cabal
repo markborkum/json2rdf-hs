@@ -1,4 +1,4 @@
-name: json2rdf
+name: json2rdf-hs
 version: 0.0.1
 license: UNLICENSE
 license-file: UNLICENSE
@@ -9,7 +9,7 @@ category: Web
 stability: stable
 cabal-version: >= 1.2
 build-type: Simple
-homepage: http://github.com/markborkum/json2rdf/tree/master
+homepage: http://github.com/markborkum/json2rdf-hs/tree/master
 
 executable json2rdf
     main-is: Main.hs
