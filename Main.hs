@@ -45,41 +45,35 @@ main :: IO ()
 main = do
   args <- cmdArgsRun mode
   
-  msgOrExpr <- parseExpression (Data.Text.IO.readFile (file_ args))
+  msgOrExpr <- fmap (fmap canonicalize . Data.Attoparsec.Text.parseOnly expr') (Data.Text.IO.readFile (file_ args))
   either (\msg -> hPutStrLn stderr msg >> exitFailure) (\expr -> rpc args expr >> exitSuccess) msgOrExpr
   
     where
-      
-      parseExpression :: IO T.Text -> IO (Either String Expression)
-      parseExpression =
-        (>>= return . fmap canonicalize . Data.Attoparsec.Text.parseOnly expr')
-      
-      parseValue :: IO B8.ByteString -> IO (Maybe JS.Value)
-      parseValue =
-        let logger = either (\msg -> hPutStrLn stderr msg >> return Nothing) (return . Just)
-        in  (>>= logger . Data.Attoparsec.ByteString.parseOnly value')
       
       rpc :: JSON2RDF -> Expression -> IO ()
       rpc (Transform _ True) =
         transform B8.getContents
       rpc (Transform _ False) =
         forever . transform B8.getLine
-      rpc (Describe _ bool1 bool2) =
-        putStrLn . render . D.pp_DescriptorTree bool2 . describeWith' bool1
-          where
-            describeWith' :: Bool -> Expression -> D.DescriptorTree T.Text ()
-            describeWith' True =
-              describeWith D.intersection maxBound
-            describeWith' False =
-              describeWith D.union minBound
+      rpc (Describe _ True indent) =
+        describe (describeWith D.intersection maxBound) indent
+      rpc (Describe _ False indent) =
+        describe (describeWith D.union minBound) indent
       
       transform :: IO B8.ByteString -> Expression -> IO ()
       transform mv expr = do
-        v <- parseValue mv
+        v <- mv >>= logger . Data.Attoparsec.ByteString.parseOnly value'
         currentTime <- getCurrentTime
         let ts = js2rdf expr (Just currentTime) v
         mapM_ (putStrLn . render . pp_RDFTriple) (S.toList ts)
           where
+            logger :: Either String JS.Value -> IO (Maybe JS.Value)
+            logger =
+              either (\msg -> hPutStrLn stderr msg >> return Nothing) (return . Just)
             pp_RDFTriple :: RDFTriple -> Doc
             pp_RDFTriple (s, p, o) =
               pPrint s <+> pPrint p <+> pPrint o <+> char '.'
+      
+      describe :: (Expression -> D.DescriptorTree T.Text ()) -> Bool -> Expression -> IO ()
+      describe f indent =
+        putStrLn . render . D.pp_DescriptorTree indent . f
