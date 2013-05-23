@@ -21,7 +21,7 @@ import           Text.PrettyPrint.HughesPJClass (pPrint, render, Doc, (<+>), cha
 import JSON2RDF
 
 data JSON2RDF = Transform { file_ :: FilePath , slurp_ :: Bool }
-              | Describe  { file_ :: FilePath , intersection_ :: Bool , indent_ :: Bool }
+              | Describe  { file_ :: FilePath , indent_ :: Bool , intersection_ :: Bool }
                 deriving (Eq, Show, Data, Typeable)
 
 mode :: Mode (CmdArgs JSON2RDF)
@@ -32,8 +32,8 @@ mode =
                         } &= help "Transform JSON document(s) into RDF graph"
                           &= auto
             , Describe  { file_         = fileFlags def
-                        , intersection_ = def &= name "I" &= help "Use \"intersection\" operator (instead of \"union\")"
                         , indent_       = def &= name "i" &= help "\"Pretty print\" output with proper indentation"
+                        , intersection_ = def &= name "I" &= help "Use \"intersection\" operator (instead of \"union\")"
                         } &= help "Print description of JSON document structure"
             ] &= program "json2rdf"
               &= summary "JSON2RDF v0.0.1, (C) Mark Borkum <m.i.borkum@soton.ac.uk>"
@@ -55,25 +55,22 @@ main = do
         transform B8.getContents
       rpc (Transform _ False) =
         forever . transform B8.getLine
-      rpc (Describe _ True indent) =
-        describe (describeWith D.intersection maxBound) indent
-      rpc (Describe _ False indent) =
-        describe (describeWith D.union minBound) indent
+      rpc (Describe _ indent True) =
+        fmap (pp_DescriptorTree indent) (describeWith D.intersection maxBound)
+      rpc (Describe _ indent False) =
+        fmap (pp_DescriptorTree indent) (describeWith D.union minBound)
       
       transform :: IO B8.ByteString -> Expression -> IO ()
       transform mv expr = do
-        v <- mv >>= logger . Data.Attoparsec.ByteString.parseOnly value'
+        v <- mv >>= either (\msg -> hPutStrLn stderr msg >> return Nothing) (return . Just) . Data.Attoparsec.ByteString.parseOnly value'
         currentTime <- getCurrentTime
         let ts = js2rdf expr (Just currentTime) v
         mapM_ (putStrLn . render . pp_RDFTriple) (S.toList ts)
-          where
-            logger :: Either String JS.Value -> IO (Maybe JS.Value)
-            logger =
-              either (\msg -> hPutStrLn stderr msg >> return Nothing) (return . Just)
-            pp_RDFTriple :: RDFTriple -> Doc
-            pp_RDFTriple (s, p, o) =
-              pPrint s <+> pPrint p <+> pPrint o <+> char '.'
       
-      describe :: (Expression -> D.DescriptorTree T.Text ()) -> Bool -> Expression -> IO ()
-      describe f indent =
-        putStrLn . render . D.pp_DescriptorTree indent . f
+      pp_RDFTriple :: RDFTriple -> Doc
+      pp_RDFTriple (s, p, o) =
+        pPrint s <+> pPrint p <+> pPrint o <+> char '.'
+      
+      pp_DescriptorTree :: Bool -> D.DescriptorTree T.Text () -> IO ()
+      pp_DescriptorTree indent =
+        putStrLn . render . D.pp_DescriptorTree indent
