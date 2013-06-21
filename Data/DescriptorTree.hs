@@ -2,6 +2,7 @@
 
 module Data.DescriptorTree
 ( DescriptorTree(..)
+, fromList , toList , toList'
 , union , unions
 , intersection , intersections
 , UnionDescriptorTree(..) , IntersectionDescriptorTree(..)
@@ -12,6 +13,7 @@ import Prelude hiding (foldr)
 
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
 import Control.Monad (ap, liftM2)
+import Data.Canonical (Canonical(canonicalize))
 import Data.Foldable (Foldable(foldMap, foldr))
 import Data.Function (on)
 import Data.Monoid (Monoid(mempty, mappend, mconcat))
@@ -31,6 +33,46 @@ data DescriptorTree k v = BottomNode
                         | UnionNode [DescriptorTree k v]
                         | TopNode
                           deriving (Eq, Ord, Read, Show)
+
+fromList :: [DescriptorTree k v] -> DescriptorTree k v
+fromList [] =
+  BottomNode
+fromList [t] =
+  t
+fromList ts =
+  UnionNode ts
+
+toList :: DescriptorTree k v -> [DescriptorTree k v]
+toList BottomNode =
+  []
+toList (UnionNode ts) =
+  ts
+toList t =
+  [t]
+
+toList' :: DescriptorTree k v -> [DescriptorTree k v] -> [DescriptorTree k v]
+toList' BottomNode =
+  id
+toList' (UnionNode []) =
+  id
+toList' (UnionNode [x]) =
+  (x :)
+toList' (UnionNode xs) =
+  (xs ++)
+toList' x =
+  (x :)
+
+instance (Ord k, Ord v) => Canonical (DescriptorTree k v) where
+  canonicalize (HomListNode t) =
+    HomListNode (canonicalize t)
+  canonicalize (HetListNode ts) =
+    HetListNode ((fmap . fmap) canonicalize ts)
+  canonicalize (AscListNode ts) =
+    AscListNode ((fmap . fmap) canonicalize ts)
+  canonicalize (UnionNode ts) =
+    fromList . S.toList . S.map canonicalize . S.fromList . foldr toList' [] $ ts
+  canonicalize t =
+    t
 
 instance Bounded (DescriptorTree k v) where
   minBound =
@@ -114,40 +156,6 @@ union =
             UnionNode [t1, t2]
           GT ->
             UnionNode [t2, t1]
-      canonicalize (HomListNode t) =
-        HomListNode (canonicalize t)
-      canonicalize (HetListNode ts) =
-        HetListNode ((fmap . fmap) canonicalize ts)
-      canonicalize (AscListNode ts) =
-        AscListNode ((fmap . fmap) canonicalize ts)
-      canonicalize (UnionNode ts) =
-        fromList (foldr (go' . canonicalize) [] ts)
-          where
-            go' BottomNode =
-              id
-            go' (UnionNode []) =
-              id
-            go' (UnionNode [t']) =
-              (t' :)
-            go' (UnionNode ts') =
-              (ts' ++)
-            go' t' =
-              (t' :)
-      canonicalize x =
-        x
-      fromList [] =
-        BottomNode
-      fromList [t'] =
-        t'
-      fromList ts' =
-        (go . S.toList . S.fromList) ts'
-          where
-            go [] =
-              BottomNode
-            go [t'] =
-              t'
-            go ts' =
-              UnionNode ts'
 
 unions :: (Ord k, Ord v, Foldable t) => t (DescriptorTree k v) -> DescriptorTree k v
 unions =
