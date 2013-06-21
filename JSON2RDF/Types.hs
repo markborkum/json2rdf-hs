@@ -595,6 +595,18 @@ instance Canonical Expression where
 
 -------------------------------------------------------------------------------
 
+instance Described (D.DescriptorTree T.Text JS.Value) JS.Value where
+  describeWith f z (JS.Object hashMap) =
+    D.AscListNode ((fmap . fmap) (describeWith f z) (HM.toList hashMap))
+  describeWith f z (JS.Array vector) =
+    D.HetListNode ((fmap . fmap) (describeWith f z) (toAscList (V.toList vector)))
+      where
+        toAscList =
+          -- reverse . foldl (flip (\x -> flip (,) x . length >>= (:))) []
+          foldr (\x -> flip (,) x . ((-) (V.length vector - 1) . length) >>= (:)) []
+  describeWith _ _ x =
+    D.ScalarNode x
+
 instance (Ord v) => Described (D.DescriptorTree T.Text v) JSValueGenerator where
   describeWith f z (ConcatJSValue createJSValueList) =
     describeWith f z createJSValueList
