@@ -11,16 +11,17 @@ import Prelude hiding (foldr)
 
 import Control.Arrow (first)
 import Control.Monad ((>=>), join, liftM, liftM2, liftM3, MonadPlus(mzero))
-import Control.Monad.Trans.RWS.Lazy.Evaluable (EvaluableT(..))
 import Data.Aeson.Parser (value')
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.Attoparsec.Number (Number(..))
 import Data.Canonical (Canonical(canonicalize))
 import Data.Described (Described(describeWith))
+import Data.Evaluated (Evaluated(evaluate, evaluateFold, evaluateFoldMap, evaluateFoldr))
 import Data.Foldable (Foldable(foldMap, foldr))
 import Data.Function (on)
+import Data.Functor.Identity (runIdentity)
 import Data.Maybe (isJust)
-import Data.Monoid (Monoid(..), All(..), Any(..))
+import Data.Monoid (Monoid(mempty, mappend, mconcat), All(..), Any(..))
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Time.Format (parseTime, formatTime)
@@ -45,7 +46,7 @@ import JSON2RDF.RDF.Graph
 
 js2rdf :: Expression -> Maybe UTCTime -> Maybe JS.Value -> RDFGraph
 js2rdf f time v =
-  (\((), _, ts) -> ts) . evaluate f . setCurrentTime time . setJSValue v $ emptyContext
+  (\((), _, ts) -> ts) . runIdentity . evaluate f . setCurrentTime time . setJSValue v $ emptyContext
 
 -------------------------------------------------------------------------------
 
@@ -296,15 +297,15 @@ instance Monoid Expression where
 
 -------------------------------------------------------------------------------
 
-instance EvaluableT JSValueGenerator RDFGraph Context (Maybe JS.Value) where
-  evaluateT (ConstJSValue v) =
-    evaluateT (const v :: Context -> Maybe JS.Value)
-  evaluateT (ConcatJSValue createJSValueList) =
-    liftM (\(text, ctx, ts) -> (liftM JS.String text, ctx, ts)) . evaluateTFoldr (\(v :: Maybe JS.Value) -> liftM2 T.append (v >>= (toLiteral >=> getLiteralText))) (return T.empty) createJSValueList
-  evaluateT (LookupJSValue key) =
-    evaluateT ((getJSValue >=> fromJSKey key) >>= (,))
-  evaluateT (LookupRDFLabel key) =
-    evaluateT (first (>>= go) . lookupRDFLabel key)
+instance Evaluated JSValueGenerator RDFGraph Context (Maybe JS.Value) where
+  evaluate (ConstJSValue v) =
+    evaluate (const v :: Context -> Maybe JS.Value)
+  evaluate (ConcatJSValue createJSValueList) =
+    liftM (\(text, ctx, ts) -> (liftM JS.String text, ctx, ts)) . evaluateFoldr (\(v :: Maybe JS.Value) -> liftM2 T.append (v >>= (toLiteral >=> getLiteralText))) (return T.empty) createJSValueList
+  evaluate (LookupJSValue key) =
+    evaluate ((getJSValue >=> fromJSKey key) >>= (,))
+  evaluate (LookupRDFLabel key) =
+    evaluate (first (>>= go) . lookupRDFLabel key)
       where
         go :: (MonadPlus m) => RDFLabel -> m JS.Value
         go lb@(Res _) =
@@ -312,128 +313,128 @@ instance EvaluableT JSValueGenerator RDFGraph Context (Maybe JS.Value) where
         go lb =
           fromLiteral lb
 
-instance EvaluableT RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
-  evaluateT (ConstRDFLabel lb) =
-    evaluateT (const lb :: Context -> Maybe RDFLabel)
-  evaluateT (GetRDFLabel key) =
-    evaluateT (lookupRDFLabel key)
-  evaluateT (AsRes createJSValue) =
-    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (v >>= toResource, ctx, ts)) . evaluateT createJSValue
-  evaluateT (AsLit createJSValue) =
-    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (v >>= toLiteral, ctx, ts)) . evaluateT createJSValue
-  evaluateT (AsLangLit createRecipient createDonor) =
+instance Evaluated RDFLabelGenerator RDFGraph Context (Maybe RDFLabel) where
+  evaluate (ConstRDFLabel lb) =
+    evaluate (const lb :: Context -> Maybe RDFLabel)
+  evaluate (GetRDFLabel key) =
+    evaluate (lookupRDFLabel key)
+  evaluate (AsRes createJSValue) =
+    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (v >>= toResource, ctx, ts)) . evaluate createJSValue
+  evaluate (AsLit createJSValue) =
+    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (v >>= toLiteral, ctx, ts)) . evaluate createJSValue
+  evaluate (AsLangLit createRecipient createDonor) =
     \ctx1 -> do
-      (lb1, ctx2, ts1) <- evaluateT createRecipient ctx1
-      (lb2, ctx3, ts2) <- evaluateT createDonor ctx2
+      (lb1, ctx2, ts1) <- evaluate createRecipient ctx1
+      (lb2, ctx3, ts2) <- evaluate createDonor ctx2
       let lb3 = maybe lb1 ((>>=) lb1 . setLiteralLanguageTag . Just) (lb2 >>= getLiteralText)
       return (lb3, ctx3, ts1 `mappend` ts2)
-  evaluateT (AsTypedLit createRecipient createDonor) =
+  evaluate (AsTypedLit createRecipient createDonor) =
     \ctx1 -> do
-      (lb1, ctx2, ts1) <- evaluateT createRecipient ctx1
-      (lb2, ctx3, ts2) <- evaluateT createDonor ctx2
+      (lb1, ctx2, ts1) <- evaluate createRecipient ctx1
+      (lb2, ctx3, ts2) <- evaluate createDonor ctx2
       let lb3 = maybe lb1 ((>>=) lb1 . setLiteralDatatype) (lb2 >>= getResourceURI)
       return (lb3, ctx3, ts1 `mappend` ts2)
-  evaluateT (AsQName key createJSValue) =
+  evaluate (AsQName key createJSValue) =
     join (maybe whenNothing whenJust . M.lookup key . getNamespaces)
       where
         whenNothing =
-          evaluateT (const Nothing :: Context -> Maybe RDFLabel)
+          evaluate (const Nothing :: Context -> Maybe RDFLabel)
         whenJust uri =
-          liftM (\(lb, ctx, ts) -> (lb >>= getLiteralText >>= Just . Res . T.append uri, ctx, ts)) . evaluateT (AsLit createJSValue)
-  evaluateT (AsBlank createPredicateObjectList) =
+          liftM (\(lb, ctx, ts) -> (lb >>= getLiteralText >>= Just . Res . T.append uri, ctx, ts)) . evaluate (AsLit createJSValue)
+  evaluate (AsBlank createPredicateObjectList) =
     \ctx1 -> do
-      (lb, ctx2, ts1) <- evaluateT newBlankRDFLabel ctx1
-      ((), ctx3, ts2) <- evaluateT (InsertRDFTriples (ConstRDFLabel lb) createPredicateObjectList) ctx2
+      (lb, ctx2, ts1) <- evaluate newBlankRDFLabel ctx1
+      ((), ctx3, ts2) <- evaluate (InsertRDFTriples (ConstRDFLabel lb) createPredicateObjectList) ctx2
       return (lb, ctx3, ts1 `mappend` ts2)
-  evaluateT AsNow =
-    evaluateT nowRDFLabel
+  evaluate AsNow =
+    evaluate nowRDFLabel
 
-instance EvaluableT Predicate RDFGraph Context Bool where
-  evaluateT (ConstBool bool) =
-    evaluateT (const bool :: Context -> Bool)
-  evaluateT (IsDefined (Left createJSValue)) =
-    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (isDefined v, ctx, ts)) . evaluateT createJSValue
+instance Evaluated Predicate RDFGraph Context Bool where
+  evaluate (ConstBool bool) =
+    evaluate (const bool :: Context -> Bool)
+  evaluate (IsDefined (Left createJSValue)) =
+    liftM (\(v :: Maybe JS.Value, ctx, ts) -> (isDefined v, ctx, ts)) . evaluate createJSValue
       where
         isDefined =
           liftM2 (&&) isJust (/= Just JS.Null)
-  evaluateT (IsDefined (Right createRDFLabel)) =
-    liftM (\(lb :: Maybe RDFLabel, ctx, ts) -> (isDefined lb, ctx, ts)) . evaluateT createRDFLabel
+  evaluate (IsDefined (Right createRDFLabel)) =
+    liftM (\(lb :: Maybe RDFLabel, ctx, ts) -> (isDefined lb, ctx, ts)) . evaluate createRDFLabel
       where
         isDefined =
           isJust
-  evaluateT (Equals (Left createJSValue1) (Left createJSValue2)) =
+  evaluate (Equals (Left createJSValue1) (Left createJSValue2)) =
     \ctx1 -> do
-      (v1 :: Maybe JS.Value, ctx2, ts1) <- evaluateT createJSValue1 ctx1
-      (v2 :: Maybe JS.Value, ctx3, ts2) <- evaluateT createJSValue2 ctx2
+      (v1 :: Maybe JS.Value, ctx2, ts1) <- evaluate createJSValue1 ctx1
+      (v2 :: Maybe JS.Value, ctx3, ts2) <- evaluate createJSValue2 ctx2
       return (v1 == v2, ctx3, ts1 `mappend` ts2)
-  evaluateT (Equals (Right createRDFLabel1) (Right createRDFLabel2)) =
+  evaluate (Equals (Right createRDFLabel1) (Right createRDFLabel2)) =
     \ctx1 -> do
-      (lb1 :: Maybe RDFLabel, ctx2, ts1) <- evaluateT createRDFLabel1 ctx1
-      (lb2 :: Maybe RDFLabel, ctx3, ts2) <- evaluateT createRDFLabel2 ctx2
+      (lb1 :: Maybe RDFLabel, ctx2, ts1) <- evaluate createRDFLabel1 ctx1
+      (lb2 :: Maybe RDFLabel, ctx3, ts2) <- evaluate createRDFLabel2 ctx2
       return (lb1 == lb2, ctx3, ts1 `mappend` ts2)
-  evaluateT (Equals (Left createJSValue) (Right createRDFLabel)) =
+  evaluate (Equals (Left createJSValue) (Right createRDFLabel)) =
     \ctx1 -> do
-      (v :: Maybe JS.Value, ctx2, ts1) <- evaluateT createJSValue ctx1
-      (lb :: Maybe RDFLabel, ctx3, ts2) <- evaluateT createRDFLabel ctx2
+      (v :: Maybe JS.Value, ctx2, ts1) <- evaluate createJSValue ctx1
+      (lb :: Maybe RDFLabel, ctx3, ts2) <- evaluate createRDFLabel ctx2
       return (go v lb, ctx3, ts1 `mappend` ts2)
     where
       go v lb@(Just (Res _)) =
         (v >>= toResource) == lb
       go v lb =
         (v >>= toLiteral) == lb
-  evaluateT (Equals l@(Right _) r@(Left _)) =
-    evaluateT (Equals r l)
-  evaluateT (NotEquals (Left createJSValue1) (Left createJSValue2)) =
+  evaluate (Equals l@(Right _) r@(Left _)) =
+    evaluate (Equals r l)
+  evaluate (NotEquals (Left createJSValue1) (Left createJSValue2)) =
     \ctx1 -> do
-      (v1 :: Maybe JS.Value, ctx2, ts1) <- evaluateT createJSValue1 ctx1
-      (v2 :: Maybe JS.Value, ctx3, ts2) <- evaluateT createJSValue2 ctx2
+      (v1 :: Maybe JS.Value, ctx2, ts1) <- evaluate createJSValue1 ctx1
+      (v2 :: Maybe JS.Value, ctx3, ts2) <- evaluate createJSValue2 ctx2
       return (v1 /= v2, ctx3, ts1 `mappend` ts2)
-  evaluateT (NotEquals (Right createRDFLabel1) (Right createRDFLabel2)) =
+  evaluate (NotEquals (Right createRDFLabel1) (Right createRDFLabel2)) =
     \ctx1 -> do
-      (lb1 :: Maybe RDFLabel, ctx2, ts1) <- evaluateT createRDFLabel1 ctx1
-      (lb2 :: Maybe RDFLabel, ctx3, ts2) <- evaluateT createRDFLabel2 ctx2
+      (lb1 :: Maybe RDFLabel, ctx2, ts1) <- evaluate createRDFLabel1 ctx1
+      (lb2 :: Maybe RDFLabel, ctx3, ts2) <- evaluate createRDFLabel2 ctx2
       return (lb1 /= lb2, ctx3, ts1 `mappend` ts2)
-  evaluateT (NotEquals (Left createJSValue) (Right createRDFLabel)) =
+  evaluate (NotEquals (Left createJSValue) (Right createRDFLabel)) =
     \ctx1 -> do
-      (v :: Maybe JS.Value, ctx2, ts1) <- evaluateT createJSValue ctx1
-      (lb :: Maybe RDFLabel, ctx3, ts2) <- evaluateT createRDFLabel ctx2
+      (v :: Maybe JS.Value, ctx2, ts1) <- evaluate createJSValue ctx1
+      (lb :: Maybe RDFLabel, ctx3, ts2) <- evaluate createRDFLabel ctx2
       return (go v lb, ctx3, ts1 `mappend` ts2)
     where
       go v lb@(Just (Res _)) =
         (v >>= toResource) /= lb
       go v lb =
         (v >>= toLiteral) /= lb
-  evaluateT (NotEquals l@(Right _) r@(Left _)) =
-    evaluateT (NotEquals r l)
-  evaluateT (Negation createBool) =
-    liftM (\(bool, ctx, ts) -> (not bool, ctx, ts)) . evaluateT createBool
-  evaluateT (Disjunction createBoolList) =
-    liftM (\(m, ctx, ts) -> (getAny m, ctx, ts)) . evaluateTFoldMap Any createBoolList
-  evaluateT (Conjunction createBoolList) =
-    liftM (\(m, ctx, ts) -> (getAll m, ctx, ts)) . evaluateTFoldMap All createBoolList
+  evaluate (NotEquals l@(Right _) r@(Left _)) =
+    evaluate (NotEquals r l)
+  evaluate (Negation createBool) =
+    liftM (\(bool, ctx, ts) -> (not bool, ctx, ts)) . evaluate createBool
+  evaluate (Disjunction createBoolList) =
+    liftM (\(m, ctx, ts) -> (getAny m, ctx, ts)) . evaluateFoldMap Any createBoolList
+  evaluate (Conjunction createBoolList) =
+    liftM (\(m, ctx, ts) -> (getAll m, ctx, ts)) . evaluateFoldMap All createBoolList
 
-instance EvaluableT Expression RDFGraph Context () where
-  evaluateT (InsertRDFTriple createSubject createPredicate createObject) =
+instance Evaluated Expression RDFGraph Context () where
+  evaluate (InsertRDFTriple createSubject createPredicate createObject) =
     \ctx1 -> do
-      (s :: Maybe RDFLabel, ctx2, ts1) <- evaluateT createSubject ctx1
-      (p :: Maybe RDFLabel, ctx3, ts2) <- evaluateT createPredicate ctx2
-      (o :: Maybe RDFLabel, ctx4, ts3) <- evaluateT createObject ctx3
+      (s :: Maybe RDFLabel, ctx2, ts1) <- evaluate createSubject ctx1
+      (p :: Maybe RDFLabel, ctx3, ts2) <- evaluate createPredicate ctx2
+      (o :: Maybe RDFLabel, ctx4, ts3) <- evaluate createObject ctx3
       let ts4 = maybe S.empty S.singleton $ liftM3 (,,) s p o
       return ((), ctx4, ts1 `mappend` ts2 `mappend` ts3 `mappend` ts4)
-  evaluateT (InsertRDFTriples createSubject createPredicateObjectList) =
+  evaluate (InsertRDFTriples createSubject createPredicateObjectList) =
     \ctx1 -> do
-      (s :: Maybe RDFLabel, ctx2, ts1) <- evaluateT createSubject ctx1
-      ((), ctx3, ts2) <- evaluateT (foldMap (uncurry $ InsertRDFTriple (ConstRDFLabel s)) createPredicateObjectList) ctx2
+      (s :: Maybe RDFLabel, ctx2, ts1) <- evaluate createSubject ctx1
+      ((), ctx3, ts2) <- evaluate (foldMap (uncurry $ InsertRDFTriple (ConstRDFLabel s)) createPredicateObjectList) ctx2
       return ((), ctx3, ts1 `mappend` ts2)
-  evaluateT (Conditional createBool whenTrue whenFalse) =
+  evaluate (Conditional createBool whenTrue whenFalse) =
     \ctx1 -> do
-      (bool, ctx2, ts1) <- evaluateT createBool ctx1
-      ((), ctx3, ts2) <- evaluateT (if bool then whenTrue else whenFalse) ctx2
+      (bool, ctx2, ts1) <- evaluate createBool ctx1
+      ((), ctx3, ts2) <- evaluate (if bool then whenTrue else whenFalse) ctx2
       return ((), ctx3, ts1 `mappend` ts2)
-  evaluateT (ForeachJSValue createJSValue expr) =
+  evaluate (ForeachJSValue createJSValue expr) =
     \ctx1 -> do
-      (v, ctx2, ts1) <- evaluateT createJSValue ctx1
-      ((), ctx3, ts2) <- evaluateT (mkOuterExpression v) ctx2
+      (v, ctx2, ts1) <- evaluate createJSValue ctx1
+      ((), ctx3, ts2) <- evaluate (mkOuterExpression v) ctx2
       return ((), ctx3, ts1 `mappend` ts2)
     where
       mkOuterExpression =
@@ -444,27 +445,27 @@ instance EvaluableT Expression RDFGraph Context () where
         V.toList . V.map Just $ vector
       returnJS _ =
         []
-  evaluateT (ForeachJSMatchRegexPOSIX createPattern createJSValue expr) =
+  evaluate (ForeachJSMatchRegexPOSIX createPattern createJSValue expr) =
     \ctx1 -> do
-      (v :: Maybe JS.Value, ctx2, ts1) <- evaluateT createPattern ctx1
-      ((), ctx3, ts2) <- evaluateT (mkExpression (v >>= (toLiteral >=> getLiteralText))) ctx2
+      (v :: Maybe JS.Value, ctx2, ts1) <- evaluate createPattern ctx1
+      ((), ctx3, ts2) <- evaluate (mkExpression (v >>= (toLiteral >=> getLiteralText))) ctx2
       return ((), ctx3, ts1 `mappend` ts2)
     where
       mkExpression (Just text) =
         ScopeExpression (SequenceExpression [SetJSValue createJSValue, ForeachJSValue (LookupJSValue [JSMatchRegexPOSIX (T.unpack text)]) expr])
       mkExpression _ =
         SequenceExpression []
-  evaluateT (ScopeExpression expr) =
+  evaluate (ScopeExpression expr) =
     \ctx1 ->
-      liftM (\((), ctx2, ts) -> ((), setBlankRDFLabelsCount (getBlankRDFLabelsCount ctx2) ctx1, ts)) . evaluateT expr $ ctx1
-  evaluateT (SequenceExpression exprs) =
-    evaluateTFold exprs
-  evaluateT (SetJSValue createJSValue) =
-    liftM (\(v, ctx, ts) -> ((), setJSValue v ctx, ts)) . evaluateT createJSValue
-  evaluateT (SetNamespace key createRDFLabel) =
-    liftM (\(lb, ctx, ts) -> ((), insertOrDeleteNamespace key (lb >>= getResourceURI) ctx, ts)) . evaluateT createRDFLabel
-  evaluateT (SetRDFLabel key createRDFLabel) =
-    liftM (\(lb, ctx, ts) -> ((), insertOrDeleteRDFLabel key (Just lb) ctx, ts)) . evaluateT createRDFLabel
+      liftM (\((), ctx2, ts) -> ((), setBlankRDFLabelsCount (getBlankRDFLabelsCount ctx2) ctx1, ts)) . evaluate expr $ ctx1
+  evaluate (SequenceExpression exprs) =
+    evaluateFold exprs
+  evaluate (SetJSValue createJSValue) =
+    liftM (\(v, ctx, ts) -> ((), setJSValue v ctx, ts)) . evaluate createJSValue
+  evaluate (SetNamespace key createRDFLabel) =
+    liftM (\(lb, ctx, ts) -> ((), insertOrDeleteNamespace key (lb >>= getResourceURI) ctx, ts)) . evaluate createRDFLabel
+  evaluate (SetRDFLabel key createRDFLabel) =
+    liftM (\(lb, ctx, ts) -> ((), insertOrDeleteRDFLabel key (Just lb) ctx, ts)) . evaluate createRDFLabel
 
 -------------------------------------------------------------------------------
 
