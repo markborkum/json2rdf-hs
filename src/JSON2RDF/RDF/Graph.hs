@@ -6,8 +6,6 @@ import           Control.Monad (MonadPlus(mzero))
 import qualified Data.Aeson as JS
 import           Data.Aeson.Parser (value')
 import qualified Data.Attoparsec.ByteString
-import           Data.Attoparsec.Number (Number(..))
-import qualified Data.Attoparsec.Text
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Scientific (floatingOrInteger)
 import qualified Data.Set as S
@@ -85,8 +83,8 @@ class FromResource a where
   fromResource :: (MonadPlus m) => RDFLabel -> m a
 
 instance FromResource JS.Value where
-  fromResource (Res text) =
-    return (JS.String text)
+  fromResource (Res text_) =
+    return (JS.String text_)
   fromResource _ =
     mzero
 
@@ -105,13 +103,14 @@ instance FromLiteral JS.Value where
         , T.pack "http://www.w3.org/2001/XMLSchema#double"
         , T.pack "http://www.w3.org/2001/XMLSchema#integer"
         ]
+  fromLiteral _ = mzero
 
 class ToResource a where
   toResource :: (MonadPlus m) => a -> m RDFLabel
 
 instance ToResource JS.Value where
-  toResource (JS.String text) =
-    return (Res text)
+  toResource (JS.String text_) =
+    return (Res text_)
   toResource _ =
     mzero
 
@@ -122,10 +121,10 @@ instance ToLiteral JS.Value where
   toLiteral (JS.Bool bool) =
     return (TypedLit (T.toLower (T.pack (show bool))) (T.pack "http://www.w3.org/2001/XMLSchema#boolean"))
   toLiteral (JS.Number num) = case Data.Scientific.floatingOrInteger num of
-    Left double -> return (TypedLit (T.pack (show double)) (T.pack "http://www.w3.org/2001/XMLSchema#double"))
-    Right int -> return (TypedLit (T.pack (show int)) (T.pack "http://www.w3.org/2001/XMLSchema#integer"))
-  toLiteral (JS.String text) =
-    return (PlainLit text Nothing)
+    Left double -> return (TypedLit (T.pack (show (double :: Double))) (T.pack "http://www.w3.org/2001/XMLSchema#double"))
+    Right int_ -> return (TypedLit (T.pack (show (int_ :: Integer))) (T.pack "http://www.w3.org/2001/XMLSchema#integer"))
+  toLiteral (JS.String text_) =
+    return (PlainLit text_ Nothing)
   toLiteral _ =
     mzero
 

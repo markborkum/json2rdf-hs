@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
 
 module JSON2RDF.Types
@@ -13,7 +15,6 @@ import Control.Arrow (first)
 import Control.Monad ((>=>), join, liftM, liftM2, liftM3, MonadPlus(mzero))
 import Data.Aeson.Parser (value')
 import Data.Attoparsec.ByteString (parseOnly)
-import Data.Attoparsec.Number (Number(..))
 import Data.Canonical (Canonical(canonicalize))
 import Data.Described (Described(describeWith))
 import Data.Evaluated (Evaluated(evaluate, evaluateFold, evaluateFoldMap, evaluateFoldr))
@@ -25,14 +26,13 @@ import Data.Monoid (Monoid(mempty, mappend, mconcat), All(..), Any(..))
 import Data.Semigroup (Semigroup())
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
-import Data.Time.Format (parseTime, formatTime, defaultTimeLocale)
+import Data.Time.Format (parseTimeM, formatTime, defaultTimeLocale)
 import Network.HTTP.Base (urlEncode, urlDecode)
 import Text.PrettyPrint.HughesPJ ((<>), (<+>), Doc, empty, braces, brackets, char, comma, colon, doubleQuotes, hcat, hsep, int, parens, space, text, zeroWidthText)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint))
 import Text.Regex.Posix ((=~))
 
 import qualified Data.Aeson as JS
-import qualified Data.ByteString
 import qualified Data.ByteString.Lazy.Char8 as B8
 import qualified Data.DescriptorTree as D
 import qualified Data.HashMap.Strict as HM
@@ -87,9 +87,9 @@ setCurrentTime :: Maybe UTCTime -> Context -> Context
 setCurrentTime x ctx =
   ctx { getCurrentTime = x }
 
-withJSValue :: (Maybe JS.Value -> Maybe JS.Value) -> Context -> Context
-withJSValue f =
-  f . getJSValue >>= setJSValue
+-- withJSValue :: (Maybe JS.Value -> Maybe JS.Value) -> Context -> Context
+-- withJSValue f =
+--   f . getJSValue >>= setJSValue
 
 withNamespaces :: (M.Map (Maybe T.Text) T.Text -> M.Map (Maybe T.Text) T.Text) -> Context -> Context
 withNamespaces f =
@@ -103,9 +103,9 @@ withBlankRDFLabelsCount :: (Int -> Int) -> Context -> Context
 withBlankRDFLabelsCount f =
   f . getBlankRDFLabelsCount >>= setBlankRDFLabelsCount
 
-withCurrentTime :: (Maybe UTCTime -> Maybe UTCTime) -> Context -> Context
-withCurrentTime f =
-  f . getCurrentTime >>= setCurrentTime
+-- withCurrentTime :: (Maybe UTCTime -> Maybe UTCTime) -> Context -> Context
+-- withCurrentTime f =
+--   f . getCurrentTime >>= setCurrentTime
 
 insertOrDeleteNamespace :: Maybe T.Text -> Maybe T.Text -> Context -> Context
 insertOrDeleteNamespace key =
@@ -174,8 +174,8 @@ instance (Foldable t, FromJSKey a) => FromJSKey (t a) where
 instance FromJSKey JSKey where
   fromJSKey JSId v =
     return v
-  fromJSKey JSLength (JS.String text) =
-    return . JS.Number . fromInteger . toInteger . T.length $ text
+  fromJSKey JSLength (JS.String text_) =
+    return . JS.Number . fromInteger . toInteger . T.length $ text_
   fromJSKey JSLength (JS.Array vector) =
     return . JS.Number . fromInteger . toInteger . V.length $ vector
   fromJSKey JSLength (JS.Object hashMap) =
@@ -199,8 +199,8 @@ instance FromJSKey JSKey where
     maybe mzero return . HM.lookup key $ hashMap
   fromJSKey (JSLookupObject _) _ =
     mzero
-  fromJSKey (JSMatchRegexPOSIX pattern) (JS.String text) =
-    go (T.unpack text =~ pattern)
+  fromJSKey (JSMatchRegexPOSIX pattern) (JS.String text_) =
+    go (T.unpack text_ =~ pattern)
       where
         go [] =
           mzero
@@ -209,36 +209,36 @@ instance FromJSKey JSKey where
           in  return (f (f (JS.String . T.pack)) xs)
   fromJSKey (JSMatchRegexPOSIX _) _ =
     mzero
-  fromJSKey JSStrip (JS.String text) =
-    return . JS.String . T.strip $ text
+  fromJSKey JSStrip (JS.String text_) =
+    return . JS.String . T.strip $ text_
   fromJSKey JSStrip _ =
     mzero
-  fromJSKey JSToLower (JS.String text) =
-    return . JS.String . T.toLower $ text
+  fromJSKey JSToLower (JS.String text_) =
+    return . JS.String . T.toLower $ text_
   fromJSKey JSToLower _ =
     mzero
-  fromJSKey JSToUpper (JS.String text) =
-    return . JS.String . T.toUpper $ text
+  fromJSKey JSToUpper (JS.String text_) =
+    return . JS.String . T.toUpper $ text_
   fromJSKey JSToUpper _ =
     mzero
-  fromJSKey (JSTime parseFormat formatFormat) (JS.String text) =
+  fromJSKey (JSTime parseFormat formatFormat) (JS.String text_) =
     let locale = defaultTimeLocale
-        time = (parseTime locale parseFormat (T.unpack text) :: Maybe UTCTime)
+        time = (parseTimeM True locale parseFormat (T.unpack text_) :: Maybe UTCTime)
     in  maybe mzero (return . JS.String . T.pack . formatTime locale formatFormat) time
   fromJSKey (JSTime _ _) _ =
     mzero
-  fromJSKey JSDecode (JS.String text) =
-    either (const mzero) return . parseOnly value' . encodeUtf8 $ text
+  fromJSKey JSDecode (JS.String text_) =
+    either (const mzero) return . parseOnly value' . encodeUtf8 $ text_
   fromJSKey JSDecode _ =
     mzero
   fromJSKey JSEncode v =
     return . JS.String . T.pack . B8.unpack . JS.encode $ v
-  fromJSKey JSURLDecode (JS.String text) =
-    return . JS.String . T.pack . urlDecode . T.unpack $ text
+  fromJSKey JSURLDecode (JS.String text_) =
+    return . JS.String . T.pack . urlDecode . T.unpack $ text_
   fromJSKey JSURLDecode _ =
     mzero
-  fromJSKey JSURLEncode (JS.String text) =
-    return . JS.String . T.pack . urlEncode . T.unpack $ text
+  fromJSKey JSURLEncode (JS.String text_) =
+    return . JS.String . T.pack . urlEncode . T.unpack $ text_
   fromJSKey JSURLEncode _ =
     mzero
 
@@ -305,7 +305,7 @@ instance Evaluated JSValueGenerator RDFGraph Context (Maybe JS.Value) where
   evaluate (ConstJSValue v) =
     evaluate (const v :: Context -> Maybe JS.Value)
   evaluate (ConcatJSValue createJSValueList) =
-    liftM (\(text, ctx, ts) -> (liftM JS.String text, ctx, ts)) . evaluateFoldr (\(v :: Maybe JS.Value) -> liftM2 T.append (v >>= (toLiteral >=> getLiteralText))) (return T.empty) createJSValueList
+    liftM (\(text_, ctx, ts) -> (liftM JS.String text_, ctx, ts)) . evaluateFoldr (\(v :: Maybe JS.Value) -> liftM2 T.append (v >>= (toLiteral >=> getLiteralText))) (return T.empty) createJSValueList
   evaluate (LookupJSValue key) =
     evaluate ((getJSValue >=> fromJSKey key) >>= (,))
   evaluate (LookupRDFLabel key) =
@@ -455,8 +455,8 @@ instance Evaluated Expression RDFGraph Context () where
       ((), ctx3, ts2) <- evaluate (mkExpression (v >>= (toLiteral >=> getLiteralText))) ctx2
       return ((), ctx3, ts1 `mappend` ts2)
     where
-      mkExpression (Just text) =
-        ScopeExpression (SequenceExpression [SetJSValue createJSValue, ForeachJSValue (LookupJSValue [JSMatchRegexPOSIX (T.unpack text)]) expr])
+      mkExpression (Just text_) =
+        ScopeExpression (SequenceExpression [SetJSValue createJSValue, ForeachJSValue (LookupJSValue [JSMatchRegexPOSIX (T.unpack text_)]) expr])
       mkExpression _ =
         SequenceExpression []
   evaluate (ScopeExpression expr) =
@@ -620,8 +620,8 @@ instance (Ord v) => Described (D.DescriptorTree T.Text v) JSValueGenerator where
       where
         go (JSLookupArray idx) =
           D.HetListNode . return . (,) idx
-        go (JSLookupObject key) =
-          D.AscListNode . return . (,) key
+        go (JSLookupObject new_key) =
+          D.AscListNode . return . (,) new_key
         go _ =
           id
   describeWith _ z _ =
@@ -711,8 +711,8 @@ instance Pretty JSValueGenerator where
           text "reverse" <> parens empty
         go (JSLookupArray idx) =
           int idx
-        go (JSLookupObject key) =
-          let string = T.unpack key in (if any ((==) '"') string then text (show string) else text string)
+        go (JSLookupObject new_key) =
+          let string = T.unpack new_key in (if any ((==) '"') string then text (show string) else text string)
         go (JSMatchRegexPOSIX pattern) =
           text "match" <> parens (text (show pattern))
         go JSStrip =
@@ -828,7 +828,7 @@ instance Pretty Expression where
                       newline <> indent (succ n) <> pp n t <> newline <> indent n
                 whenTrueSpace =
                   case whenTrue of
-                    t@(ScopeExpression _) ->
+                    _t@(ScopeExpression _) ->
                       space
                     _ ->
                       empty

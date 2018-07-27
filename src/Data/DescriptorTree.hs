@@ -19,7 +19,7 @@ import Data.Function (on)
 import Data.Monoid (Monoid(mempty, mappend, mconcat))
 import Data.Semigroup (Semigroup())
 import Data.Traversable (Traversable(traverse), fmapDefault, foldMapDefault)
-import Text.PrettyPrint.HughesPJ (Doc, (<>), braces, brackets, char, colon, comma, hcat, hsep, int, parens, space, text, zeroWidthText)
+import Text.PrettyPrint.HughesPJ (Doc, (<>), braces, brackets, char, colon, comma, hcat, int, parens, space, text, zeroWidthText)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint))
 
 import qualified Data.List as L

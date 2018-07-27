@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
+module Main
+  ( main
+  ) where
+
 import           Control.Monad (forever)
-import qualified Data.Aeson as JS
 import           Data.Aeson.Parser (value')
 import qualified Data.Attoparsec.ByteString
 import qualified Data.Attoparsec.Text
@@ -43,10 +46,10 @@ mode =
 
 main :: IO ()
 main = do
-  args <- cmdArgsRun mode
+  args_ <- cmdArgsRun mode
 
-  msgOrExpr <- fmap (fmap canonicalize . Data.Attoparsec.Text.parseOnly expr') (Data.Text.IO.readFile (file_ args))
-  either (\msg -> hPutStrLn stderr msg >> exitFailure) (\expr -> rpc args expr >> exitSuccess) msgOrExpr
+  msgOrExpr <- fmap (fmap canonicalize . Data.Attoparsec.Text.parseOnly expr') (Data.Text.IO.readFile (file_ args_))
+  either (\msg -> hPutStrLn stderr msg >> exitFailure) (\expr -> rpc args_ expr >> exitSuccess) msgOrExpr
 
     where
 
