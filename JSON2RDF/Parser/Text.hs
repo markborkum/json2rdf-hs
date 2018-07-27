@@ -234,7 +234,7 @@ value_ =
         P.string (T.pack "null")
         return (ConstJSValue Nothing)
       number_ = do
-        n <- P.number
+        n <- P.scientific
         return (ConstJSValue (Just (JS.Number n)))
 
 ref_ :: P.Parser JSValueGenerator

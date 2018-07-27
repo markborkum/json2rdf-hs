@@ -1,0 +1,32 @@
+name: json2rdf-hs
+version: 0.0.2
+license: UNLICENSE
+license-file: UNLICENSE
+author: Mark Borkum <mark.borkum@pnnl.gov>
+maintainer: Mark Borkum <mark.borkum@pnnl.gov>
+synopsis: Utility to convert a file from JSON to RDF format.
+category: Web
+stability: stable
+cabal-version: >= 1.2
+build-type: Simple
+homepage: http://github.com/markborkum/json2rdf-hs/tree/master
+
+executable json2rdf
+    main-is: Main.hs
+    build-depends:
+        base,
+        aeson,
+        attoparsec,
+        bytestring,
+        cmdargs,
+        containers,
+        pretty,
+        regex-posix,
+        scientific,
+        text,
+        time,
+        transformers,
+        unordered-containers,
+        vector,
+        HTTP
+    ghc-options: -Wall

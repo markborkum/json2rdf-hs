@@ -7,6 +7,7 @@ import qualified Data.Attoparsec.ByteString
 import           Data.Attoparsec.Number (Number(..))
 import qualified Data.Attoparsec.Text
 import qualified Data.ByteString.Char8 as B8
+import qualified Data.Scientific (floatingOrInteger)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Text.PrettyPrint.HughesPJ ((<>), char, int, text)
@@ -118,10 +119,9 @@ class ToLiteral a where
 instance ToLiteral JS.Value where
   toLiteral (JS.Bool bool) =
     return (TypedLit (T.toLower (T.pack (show bool))) (T.pack "http://www.w3.org/2001/XMLSchema#boolean"))
-  toLiteral (JS.Number (D double)) =
-    return (TypedLit (T.pack (show double)) (T.pack "http://www.w3.org/2001/XMLSchema#double"))
-  toLiteral (JS.Number (I int)) =
-    return (TypedLit (T.pack (show int)) (T.pack "http://www.w3.org/2001/XMLSchema#integer"))
+  toLiteral (JS.Number num) = case Data.Scientific.floatingOrInteger num of
+    Left double -> return (TypedLit (T.pack (show double)) (T.pack "http://www.w3.org/2001/XMLSchema#double"))
+    Right int -> return (TypedLit (T.pack (show int)) (T.pack "http://www.w3.org/2001/XMLSchema#integer"))
   toLiteral (JS.String text) =
     return (PlainLit text Nothing)
   toLiteral _ =

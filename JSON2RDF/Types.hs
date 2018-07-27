@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
 
 module JSON2RDF.Types
 ( js2rdf
@@ -24,9 +24,8 @@ import Data.Maybe (isJust)
 import Data.Monoid (Monoid(mempty, mappend, mconcat), All(..), Any(..))
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
-import Data.Time.Format (parseTime, formatTime)
+import Data.Time.Format (parseTime, formatTime, defaultTimeLocale)
 import Network.HTTP.Base (urlEncode, urlDecode)
-import System.Locale (defaultTimeLocale)
 import Text.PrettyPrint.HughesPJ ((<>), (<+>), Doc, empty, braces, brackets, char, comma, colon, doubleQuotes, hcat, hsep, int, parens, space, text, zeroWidthText)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint))
 import Text.Regex.Posix ((=~))
@@ -174,13 +173,13 @@ instance FromJSKey JSKey where
   fromJSKey JSId v =
     return v
   fromJSKey JSLength (JS.String text) =
-    return . JS.Number . I . toInteger . T.length $ text
+    return . JS.Number . fromInteger . toInteger . T.length $ text
   fromJSKey JSLength (JS.Array vector) =
-    return . JS.Number . I . toInteger . V.length $ vector
+    return . JS.Number . fromInteger . toInteger . V.length $ vector
   fromJSKey JSLength (JS.Object hashMap) =
-    return . JS.Number . I . toInteger . HM.size $ hashMap
+    return . JS.Number . fromInteger . toInteger . HM.size $ hashMap
   fromJSKey JSLength _ =
-    return . JS.Number . I $ 1
+    return . JS.Number . fromInteger $ 1
   fromJSKey JSReverseArray (JS.Array vector) =
     return . JS.Array . V.reverse $ vector
   fromJSKey JSReverseArray _ =
@@ -835,7 +834,7 @@ instance Pretty Expression where
                     SequenceExpression [] ->
                       empty
                     t@(ScopeExpression _) ->
-                      text "ELSE" 
+                      text "ELSE"
                         <+> pp n t
                     t ->
                       text "ELSE"
