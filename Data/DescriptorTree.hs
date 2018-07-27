@@ -9,7 +9,7 @@ module Data.DescriptorTree
 , pp_DescriptorTree
 ) where
 
-import Prelude hiding (foldr)
+import Prelude hiding (foldr, (<>))
 
 import Control.Applicative (Applicative(pure, (<*>)), (<$>))
 import Control.Monad (ap, liftM2)
@@ -17,12 +17,14 @@ import Data.Canonical (Canonical(canonicalize))
 import Data.Foldable (Foldable(foldMap, foldr))
 import Data.Function (on)
 import Data.Monoid (Monoid(mempty, mappend, mconcat))
+import Data.Semigroup (Semigroup())
 import Data.Traversable (Traversable(traverse), fmapDefault, foldMapDefault)
 import Text.PrettyPrint.HughesPJ (Doc, (<>), braces, brackets, char, colon, comma, hcat, hsep, int, parens, space, text, zeroWidthText)
 import Text.PrettyPrint.HughesPJClass (Pretty(pPrint))
 
 import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Semigroup ((<>))
 import qualified Data.Set as S
 
 data DescriptorTree k v = BottomNode
@@ -193,6 +195,9 @@ newtype UnionDescriptorTree k v = UnionDescriptorTree { unionDescriptorTree :: D
 newtype IntersectionDescriptorTree k v = IntersectionDescriptorTree { intersectionDescriptorTree :: DescriptorTree k v }
   deriving (Bounded, Eq, Read, Show, Functor, Foldable, Traversable, Applicative, Monad)
 
+instance (Ord k, Ord v) => Semigroup (UnionDescriptorTree k v) where
+  (<>) = mappend
+
 instance (Ord k, Ord v) => Monoid (UnionDescriptorTree k v) where
   mempty =
     minBound
@@ -200,6 +205,9 @@ instance (Ord k, Ord v) => Monoid (UnionDescriptorTree k v) where
     UnionDescriptorTree (t1 `union` t2)
   mconcat =
     UnionDescriptorTree . unions . fmap unionDescriptorTree
+
+instance (Ord k, Ord v) => Semigroup (IntersectionDescriptorTree k v) where
+  (<>) = mappend
 
 instance (Ord k, Ord v) => Monoid (IntersectionDescriptorTree k v) where
   mempty =

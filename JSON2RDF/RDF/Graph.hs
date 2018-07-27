@@ -1,5 +1,7 @@
 module JSON2RDF.RDF.Graph where
 
+import Prelude hiding ((<>))
+
 import           Control.Monad (MonadPlus(mzero))
 import qualified Data.Aeson as JS
 import           Data.Aeson.Parser (value')

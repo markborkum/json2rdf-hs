@@ -7,7 +7,7 @@ module JSON2RDF.Types
 , module JSON2RDF.RDF.Graph
 ) where
 
-import Prelude hiding (foldr)
+import Prelude hiding (foldr, (<>))
 
 import Control.Arrow (first)
 import Control.Monad ((>=>), join, liftM, liftM2, liftM3, MonadPlus(mzero))
@@ -22,6 +22,7 @@ import Data.Function (on)
 import Data.Functor.Identity (runIdentity)
 import Data.Maybe (isJust)
 import Data.Monoid (Monoid(mempty, mappend, mconcat), All(..), Any(..))
+import Data.Semigroup (Semigroup())
 import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Time.Format (parseTime, formatTime, defaultTimeLocale)
@@ -37,6 +38,7 @@ import qualified Data.DescriptorTree as D
 import qualified Data.HashMap.Strict as HM
 import qualified Data.List as L
 import qualified Data.Map as M
+import qualified Data.Semigroup ((<>))
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Vector as V
@@ -279,6 +281,9 @@ data Expression = InsertRDFTriple RDFLabelGenerator RDFLabelGenerator RDFLabelGe
                 | SetNamespace (Maybe T.Text) RDFLabelGenerator
                 | SetRDFLabel T.Text RDFLabelGenerator
                   deriving (Eq, Show)
+
+instance Semigroup Expression where
+  (<>) = mappend
 
 instance Monoid Expression where
   mempty =
